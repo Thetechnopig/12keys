@@ -12,13 +12,20 @@ const center = {
   lng: -98.5795
 };
 
+const mapOptions = {
+  mapTypeId: 'satellite',
+  disableDefaultUI: true,
+  zoomControl: true,
+};
+
 const API_KEY = "YOUR_API_KEY_HERE"; // IMPORTANT: Replace with your actual API key
-const LIBRARIES = ['drawing'];
+const LIBRARIES = ['drawing', 'geometry'];
 
 const FEET_TO_METERS = 0.3048;
+const SQ_METERS_TO_SQ_FEET = 10.7639;
 
 const SPRINKLER_TYPES = {
-  rotor: { name: 'Rotor', radius: 30 }, // radius in feet
+  rotor: { name: 'Rotor', radius: 30 },
   spray: { name: 'Spray', radius: 15 },
 };
 
@@ -35,6 +42,14 @@ const circleOptions = {
   zIndex: 1
 };
 
+const polygonOptions = {
+  fillColor: 'lightgreen',
+  strokeColor: 'green',
+  clickable: false,
+  draggable: false,
+  editable: false,
+};
+
 function App() {
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
@@ -47,10 +62,17 @@ function App() {
   const [drawingMode, setDrawingMode] = useState(true);
   const [sprinklers, setSprinklers] = useState([]);
   const [selectedSprinkler, setSelectedSprinkler] = useState(null);
+  const [propertyArea, setPropertyArea] = useState(0);
 
   const onPolygonComplete = useCallback(polygon => {
-    const newPath = polygon.getPath().getArray().map(latLng => ({ lat: latLng.lat(), lng: latLng.lng() }));
-    setPath(newPath);
+    const newPath = polygon.getPath().getArray();
+    const newPathCoords = newPath.map(latLng => ({ lat: latLng.lat(), lng: latLng.lng() }));
+    setPath(newPathCoords);
+
+    const areaInMeters = window.google.maps.geometry.spherical.computeArea(newPath);
+    const areaInFeet = Math.round(areaInMeters * SQ_METERS_TO_SQ_FEET);
+    setPropertyArea(areaInFeet);
+
     setDrawingMode(false);
     polygon.setMap(null);
   }, []);
@@ -60,6 +82,7 @@ function App() {
     setSprinklers([]);
     setSelectedSprinkler(null);
     setDrawingMode(true);
+    setPropertyArea(0);
   };
 
   const handleClearSprinklers = () => {
@@ -102,6 +125,9 @@ function App() {
           <div>
             <button onClick={handleResetProperty}>Redraw Property</button>
             <hr />
+            <h3>Property Details</h3>
+            <p><strong>Area:</strong> {propertyArea.toLocaleString()} sq. ft.</p>
+            <hr />
             <h3>Place Sprinklers</h3>
             <p>Select a type, then click on the map.</p>
             {Object.keys(SPRINKLER_TYPES).map(key => (
@@ -138,6 +164,7 @@ function App() {
         onLoad={onLoad}
         onUnmount={onUnmount}
         onClick={handleMapClick}
+        options={mapOptions}
       >
         {drawingMode && (
           <DrawingManager
@@ -151,7 +178,7 @@ function App() {
             }}
           />
         )}
-        {path.length > 0 && <Polygon paths={path} options={{ fillColor: 'lightgreen', strokeColor: 'green' }} />}
+        {path.length > 0 && <Polygon paths={path} options={polygonOptions} />}
 
         {sprinklers.map(sprinkler => (
           <Fragment key={sprinkler.id}>
